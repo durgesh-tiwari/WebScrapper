@@ -1,0 +1,68 @@
+import pandas as pd
+
+# Example structure of data with varying week lengths
+data = {
+    'id': [1]*31 + [2]*52 + [3]*40,  # Three different item IDs with different week counts
+    'units': list(range(100, 131)) + list(range(200, 252)) + list(range(300, 340)),  # Units for products
+    'price': list(range(10, 41)) + list(range(20, 72)) + list(range(30, 70)),  # Prices for products
+    'week_number': list(range(1, 32)) + list(range(1, 53)) + list(range(1, 41))  # Week numbers for each item
+}
+
+df = pd.DataFrame(data)
+
+# Function to calculate adjusted units and adjusted price with dynamic handling of week counts
+def calculate_adjusted(df):
+    # Create shifted columns to simulate the week-wise calculation
+    df['units_shift_1'] = df.groupby('id')['units'].shift(-1)
+    df['units_shift_2'] = df.groupby('id')['units'].shift(-2)
+    df['units_shift_3'] = df.groupby('id')['units'].shift(-3)
+    df['units_shift_4'] = df.groupby('id')['units'].shift(-4)
+    
+    df['price_shift_1'] = df.groupby('id')['price'].shift(-1)
+    df['price_shift_2'] = df.groupby('id')['price'].shift(-2)
+    df['price_shift_3'] = df.groupby('id')['price'].shift(-3)
+    df['price_shift_4'] = df.groupby('id')['price'].shift(-4)
+
+    # Use the pattern logic for adjusted units and price
+    conditions = [
+        (df['week_number'] % 4 == 1),
+        (df['week_number'] % 4 == 2),
+        (df['week_number'] % 4 == 3),
+        (df['week_number'] % 4 == 0),
+    ]
+    
+    # Calculating the adjusted units and price based on the given conditions
+    df['adjusted_units'] = pd.Series(dtype='float64')
+    df['adjusted_price'] = pd.Series(dtype='float64')
+    
+    # For week numbers % 4 == 1 (sum of week2, week3, week4)
+    df.loc[conditions[0], 'adjusted_units'] = df[['units_shift_1', 'units_shift_2', 'units_shift_3']].sum(axis=1, min_count=1)
+    df.loc[conditions[0], 'adjusted_price'] = df[['price_shift_1', 'price_shift_2', 'price_shift_3']].sum(axis=1, min_count=1)
+
+    # For week numbers % 4 == 2 (sum of week3, week4)
+    df.loc[conditions[1], 'adjusted_units'] = df[['units_shift_1', 'units_shift_2']].sum(axis=1, min_count=1)
+    df.loc[conditions[1], 'adjusted_price'] = df[['price_shift_1', 'price_shift_2']].sum(axis=1, min_count=1)
+
+    # For week numbers % 4 == 3 (week4)
+    df.loc[conditions[2], 'adjusted_units'] = df['units_shift_1']
+    df.loc[conditions[2], 'adjusted_price'] = df['price_shift_1']
+
+    # For week numbers % 4 == 0 (sum of week5, week6, week7, week8)
+    df.loc[conditions[3], 'adjusted_units'] = df[['units_shift_1', 'units_shift_2', 'units_shift_3', 'units_shift_4']].sum(axis=1, min_count=1)
+    df.loc[conditions[3], 'adjusted_price'] = df[['price_shift_1', 'price_shift_2', 'price_shift_3', 'price_shift_4']].sum(axis=1, min_count=1)
+
+    # Fill NaNs for the last weeks, where shift will result in NaNs
+    df['adjusted_units'].fillna(df['units'], inplace=True)
+    df['adjusted_price'].fillna(df['price'], inplace=True)
+    
+    # Drop the shifted columns (optional)
+    df.drop(['units_shift_1', 'units_shift_2', 'units_shift_3', 'units_shift_4',
+             'price_shift_1', 'price_shift_2', 'price_shift_3', 'price_shift_4'], axis=1, inplace=True)
+    
+    return df
+
+# Apply the function to calculate adjusted units and prices
+df = calculate_adjusted(df)
+
+# Print the updated DataFrame
+print(df[['id', 'week_number', 'units', 'adjusted_units', 'price', 'adjusted_price']])
